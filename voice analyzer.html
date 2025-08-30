@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Voice Frequency Analyzer - Vertical Bars</title>
+	<style>
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+				Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+			background: #111;
+			color: white;
+			margin: 0;
+			padding: 12px;
+		}
+
+		#bars {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+			max-width: 120px;
+			margin-top: 12px;
+		}
+
+		.bar {
+			width: 100px;
+			background: #222;
+			border-radius: 4px;
+			overflow: hidden;
+			position: relative;
+			height: 20px;
+		}
+
+		.fill {
+			background: #0af;
+			height: 0%;
+			width: 100%;
+			transition: height 0.1s ease-out;
+		}
+
+		.label {
+			font-size: 12px;
+			color: #ccc;
+			margin-top: 4px;
+			text-align: center;
+			user-select: none;
+		}
+
+		#startBtn {
+			padding: 10px 20px;
+			font-size: 16px;
+			border-radius: 8px;
+			border: none;
+			background-color: #0af;
+			color: white;
+			cursor: pointer;
+			user-select: none;
+			transition: background-color 0.3s;
+		}
+
+		#startBtn:hover {
+			background-color: #08c;
+		}
+	</style>
+</head>
+
+<body>
+
+	<h2>Voice Frequency Analyzer</h2>
+	<button id="startBtn">Start Mic</button>
+	<div id="bars"></div>
+
+	<script>
+		const keyFreqs = [1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 20, 21, 23, 27, 29, 30, 31, 32, 33, 35, 39, 48, 51, 61, 65, 67, 68, 74, 77, 90, 99, 111, 123, 144, 170, 240, 280, 360, 444, 555, 604, 666, 710, 777, 805, 864, 900, 964, 1000];
+		const barsContainer = document.getElementById('bars');
+		const startBtn = document.getElementById('startBtn');
+		let audioCtx = null,
+			analyser = null,
+			source = null,
+			animationId = null;
+
+		const barElements = {};
+
+		// Create bars for each frequency (bar + label)
+		for (const f of keyFreqs) {
+			const wrapper = document.createElement('div');
+			wrapper.style.marginBottom = '16px';
+
+			const bar = document.createElement('div');
+			bar.className = 'bar';
+
+			const fill = document.createElement('div');
+			fill.className = 'fill';
+			fill.style.height = '0%';
+			bar.appendChild(fill);
+
+			const label = document.createElement('div');
+			label.className = 'label';
+			label.textContent = f + ' Hz';
+
+			wrapper.appendChild(bar);
+			wrapper.appendChild(label);
+			barsContainer.appendChild(wrapper);
+
+			barElements[f] = fill;
+		}
+
+		async function startAudio() {
+			try {
+				if (!audioCtx) {
+					const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+					if (!AudioContextClass) {
+						alert("Web Audio API is not supported in this browser.");
+						return;
+					}
+					audioCtx = new AudioContextClass();
+				}
+
+				if (audioCtx.state === 'suspended') {
+					await audioCtx.resume();
+				}
+
+				const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+				source = audioCtx.createMediaStreamSource(stream);
+				analyser = audioCtx.createAnalyser();
+				analyser.fftSize = 2048;
+
+				source.connect(analyser);
+
+				const sampleRate = audioCtx.sampleRate;
+				const freqBinCount = analyser.frequencyBinCount; // fftSize/2
+				const dataArray = new Uint8Array(freqBinCount);
+
+				function getVolumeForFreq(freq) {
+					// Map frequency to closest FFT bin
+					const bin = Math.round(freq / (sampleRate / 2) * freqBinCount);
+					if (bin < 0 || bin >= freqBinCount) return 0;
+					return dataArray[bin];
+				}
+
+				function update() {
+					analyser.getByteFrequencyData(dataArray);
+
+					for (const f of keyFreqs) {
+						const vol = getVolumeForFreq(f); // 0–255
+						const percent = (Math.log(vol)**2 / Math.log(255)**2) * 100;
+						barElements[f].style.height = percent + '%';
+					}
+
+					animationId = requestAnimationFrame(update);
+				}
+
+				update();
+				startBtn.textContent = 'Stop Mic';
+
+			} catch (err) {
+				alert('Microphone access denied or error: ' + err.message);
+				startBtn.textContent = 'Start Mic';
+				cleanup();
+			}
+		}
+
+		function cleanup() {
+			if (animationId) cancelAnimationFrame(animationId);
+			animationId = null;
+			if (analyser) analyser.disconnect();
+			analyser = null;
+			if (source) source.disconnect();
+			source = null;
+			if (audioCtx) {
+				audioCtx.close();
+				audioCtx = null;
+			}
+			for (const f of keyFreqs) {
+				barElements[f].style.height = '0%';
+			}
+		}
+
+		startBtn.onclick = () => {
+			if (audioCtx) {
+				cleanup();
+				startBtn.textContent = 'Start Mic';
+			} else {
+				startAudio();
+			}
+		};
+	</script>
+
+</body>
+
+</html>
