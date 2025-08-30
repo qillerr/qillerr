@@ -1,5 +1,7 @@
 ## Hi there 👋
 
+check out my voice analyzer in this repo
+its the key
 <!--
 **qillerr/qillerr** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
